@@ -224,7 +224,9 @@ function SplashScreen({ onFinish }) {
 // --- Welcome Screen ---
 function WelcomeScreen({ setScreen }) {
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-indigo-900 p-4">
+        // Le conteneur parent doit prendre toute la largeur et centrer son contenu
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-indigo-900 p-4 w-full max-w-full mx-auto">
+            {/* Le contenu du WelcomeScreen lui-même a déjà une max-w-md et est centré par le parent */}
             <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-xl shadow-lg text-center">
                 <h1 className="text-5xl font-bold text-white tracking-wider">UNDERCOVER</h1>
                 <p className="text-lg text-gray-300">Choisissez votre mode de jeu</p>
@@ -236,7 +238,6 @@ function WelcomeScreen({ setScreen }) {
         </div>
     );
 }
-
 // --- Auth Screen ---
 function AuthScreen({ setScreen }) {
     const [isLogin, setIsLogin] = useState(true);

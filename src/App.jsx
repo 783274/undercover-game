@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -24,9 +24,12 @@ import {
     getDocs,
     query,
     where,
-    documentId
+    documentId,
+    orderBy,
+    limit,
+    serverTimestamp
 } from 'firebase/firestore';
-import { getDatabase, ref, onValue, set, onDisconnect, serverTimestamp } from "firebase/database";
+import { getDatabase, ref, onValue, set, onDisconnect } from "firebase/database";
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -224,9 +227,7 @@ function SplashScreen({ onFinish }) {
 // --- Welcome Screen ---
 function WelcomeScreen({ setScreen }) {
     return (
-        // Le conteneur parent doit prendre toute la largeur et centrer son contenu
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-indigo-900 p-4 w-full max-w-full mx-auto">
-            {/* Le contenu du WelcomeScreen lui-même a déjà une max-w-md et est centré par le parent */}
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-indigo-900 p-4">
             <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-xl shadow-lg text-center">
                 <h1 className="text-5xl font-bold text-white tracking-wider">UNDERCOVER</h1>
                 <p className="text-lg text-gray-300">Choisissez votre mode de jeu</p>
@@ -238,6 +239,7 @@ function WelcomeScreen({ setScreen }) {
         </div>
     );
 }
+
 // --- Auth Screen ---
 function AuthScreen({ setScreen }) {
     const [isLogin, setIsLogin] = useState(true);
@@ -1103,7 +1105,7 @@ function OfflineGame({ localGameData, setScreen }) {
                             <div key={p.id} className={`p-4 rounded-lg flex justify-between items-center transition ${p.isEliminated ? 'bg-red-900 opacity-50' : 'bg-gray-800'}`}>
                                 <div>
                                     <p className={`text-xl font-semibold ${p.isEliminated ? 'line-through' : ''}`}>{p.name}</p>
-                                    {p.isEliminated && <p className="text-sm text-red-300">{p.role} - "{p.word}"</p>}
+                                    {p.isEliminated && <p className="text-sm text-red-300">{p.role}</p>}
                                 </div>
                                 {!p.isEliminated && <button onClick={() => eliminatePlayer(p.id)} className="px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">Éliminer</button>}
                             </div>

@@ -1,6 +1,4 @@
 #root {
-  /* max-width: 1280px; <-- Supprimez cette ligne */
-  /* margin: 0 auto; <-- Supprimez cette ligne */
   padding: 0; /* Mettez le padding à 0 ou ajustez-le si nécessaire */
   text-align: center; /* Gardez si vous voulez que le texte soit centré par défaut */
   width: 100%; /* Assurez-vous qu'il prend toute la largeur disponible */

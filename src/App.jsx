@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -307,7 +307,6 @@ function AuthScreen({ setScreen }) {
 }
 
 // --- Lobby Component (Online) ---
-// --- Lobby Component (Online) ---
 function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
     const [joinCode, setJoinCode] = useState('');
     const [error, setError] = useState('');
@@ -315,7 +314,6 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
     const [onlinePlayers, setOnlinePlayers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Fonction pour générer un ID de partie
     const generateGameId = (length = 6) => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
@@ -325,26 +323,36 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         return result;
     };
 
-    // Effet pour charger le profil utilisateur et les joueurs en ligne
     useEffect(() => {
         if (!user || user.isAnonymous) return;
         
         const userProfileRef = doc(db, 'userProfiles', user.uid);
         const unsubscribeProfile = onSnapshot(userProfileRef, (doc) => {
             if (doc.exists()) {
-                setUserProfile(doc.data());
+                const data = doc.data();
+                if (!data.pseudo) {
+                    const defaultPseudo = user.email.split('@')[0];
+                    updateDoc(userProfileRef, { pseudo: defaultPseudo })
+                        .then(() => setUserProfile({ ...data, pseudo: defaultPseudo }));
+                } else {
+                    setUserProfile(data);
+                }
             } else {
-                // Créer un profil si l'utilisateur n'en a pas (première connexion)
-                setDoc(userProfileRef, { email: user.email, pseudo: "Nouveau Joueur", score: 0 });
+                const defaultPseudo = user.email.split('@')[0];
+                setDoc(userProfileRef, { 
+                    email: user.email, 
+                    pseudo: defaultPseudo, 
+                    score: 0,
+                    state: 'online'
+                });
             }
         }, err => console.error("Error reading user profile:", err));
 
-        // Écouter les joueurs en ligne
         const onlineUsersRef = query(collection(db, 'userProfiles'), where("state", "==", "online"));
         const unsubscribeOnline = onSnapshot(onlineUsersRef, (snapshot) => {
             const players = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(p => p.id !== user.uid); // Exclure l'utilisateur actuel de la liste
+                .filter(p => p.id !== user.uid); 
             setOnlinePlayers(players);
         }, err => console.error("Error reading online players:", err));
 
@@ -354,7 +362,6 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         };
     }, [user]);
     
-    // Fonction pour créer une nouvelle partie en ligne
     const createGame = async () => {
         if (!userProfile || !userProfile.pseudo) {
             setError("Profil en cours de chargement, veuillez patienter...");
@@ -365,7 +372,6 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         try {
             let newGameId;
             let idExists = true;
-            // Générer un ID unique pour la partie
             while (idExists) {
                 newGameId = generateGameId();
                 const gameDocRef = doc(db, 'games', newGameId);
@@ -374,13 +380,12 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
             }
 
             const host = { uid: user.uid, pseudo: userProfile.pseudo, isHost: true };
-            // Créer le document de la partie dans Firestore
             await setDoc(doc(db, 'games', newGameId), {
                 host, players: [host], createdAt: new Date(), status: 'waiting',
             });
             
             setOnlineGameId(newGameId);
-            setScreen('onlineGame'); // Passer à l'écran de la salle de jeu
+            setScreen('onlineGame');
         } catch (err) { 
             console.error(err); 
             setError("Impossible de créer la partie."); 
@@ -389,7 +394,6 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         }
     };
 
-    // Fonction pour rejoindre une partie existante
     const joinGame = async () => {
         if (!userProfile || !userProfile.pseudo) {
             setError("Profil en cours de chargement, veuillez patienter...");
@@ -402,11 +406,8 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
             const gameSnap = await getDoc(gameRef);
             if (gameSnap.exists()) {
                 const gameData = gameSnap.data();
-                // Si le joueur est déjà dans la partie, le rediriger directement
                 if (gameData.players.some(p => p.uid === user.uid)) { setOnlineGameId(joinCode.toUpperCase()); setScreen('onlineGame'); return; }
-                // Vérifier le statut de la partie
                 if (gameData.status !== 'waiting') { setError("Cette partie a déjà commencé ou est terminée."); return; }
-                // Ajouter le joueur à la partie
                 await updateDoc(gameRef, { players: arrayUnion({ uid: user.uid, pseudo: userProfile.pseudo, isHost: false }) });
                 setOnlineGameId(joinCode.toUpperCase());
                 setScreen('onlineGame');
@@ -416,36 +417,30 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
 
     return (
         <div className="min-h-screen bg-gray-900 p-4 lg:p-8">
-            {/* Boutons de navigation en haut à droite */}
             <div className="absolute top-4 right-4 flex space-x-2">
                  <button onClick={() => setScreen('welcome')} className="px-4 py-2 text-sm font-semibold bg-gray-600 rounded-lg hover:bg-gray-700 transition">Changer de mode</button>
                  <button onClick={onSignOut} className="px-4 py-2 text-sm font-semibold bg-red-600 rounded-lg hover:bg-red-700 transition">Déconnexion</button>
             </div>
-            
-            {/* Conteneur principal centré avec largeur limitée */}
-            <div className="max-w-md mx-auto mt-12"> {/* J'ai ajouté mt-12 pour un peu d'espace en haut */}
-                {/* Section Bienvenue et Score */}
-                <div className="text-center mb-8">
-                    <h1 className="text-5xl font-bold text-white mb-2">Bienvenue,</h1>
-                    <p className="text-indigo-400 text-lg mb-2">{userProfile?.pseudo || user.email}</p>
-                    <p className="text-2xl text-yellow-400 font-bold mb-10">Score: {userProfile?.score || 0}</p>
-                </div>
-
-                {/* Section Créer/Rejoindre une Partie */}
-                <div className="space-y-6 w-full"> {/* Supprimé max-w-sm et mx-auto ici car le parent gère la largeur */}
-                    <button onClick={createGame} disabled={isLoading || !userProfile} className="w-full py-4 text-xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105 disabled:bg-gray-500">
-                        {isLoading ? 'Création...' : 'Créer une Partie'}
-                    </button>
-                    <div className="relative flex items-center"><hr className="w-full border-gray-600" /><span className="absolute px-3 font-medium text-gray-400 bg-gray-900 -translate-x-1/2 left-1/2">OU</span></div>
-                    <div className="space-y-2">
-                        <input type="text" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="CODE DE PARTIE" className="w-full p-4 text-center tracking-widest text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:border-indigo-500 outline-none transition uppercase"/>
-                         <button onClick={joinGame} disabled={!userProfile} className="w-full py-3 font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition transform hover:scale-105 disabled:bg-gray-500">Rejoindre une Partie</button>
+            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2">
+                    <div className="text-center lg:text-left">
+                        <h1 className="text-5xl font-bold text-white mb-2">Bienvenue,</h1>
+                        <p className="text-indigo-400 text-lg mb-2">{userProfile?.pseudo || user.email}</p>
+                        <p className="text-2xl text-yellow-400 font-bold mb-10">Score: {userProfile?.score || 0}</p>
                     </div>
-                    {error && <p className="text-red-400 mt-4">{error}</p>}
+                    <div className="space-y-6 w-full max-w-sm mx-auto lg:mx-0">
+                        <button onClick={createGame} disabled={isLoading || !userProfile} className="w-full py-4 text-xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105 disabled:bg-gray-500">
+                            {isLoading ? 'Création...' : 'Créer une Partie'}
+                        </button>
+                        <div className="relative flex items-center"><hr className="w-full border-gray-600" /><span className="absolute px-3 font-medium text-gray-400 bg-gray-900 -translate-x-1/2 left-1/2">OU</span></div>
+                        <div className="space-y-2">
+                            <input type="text" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="CODE DE PARTIE" className="w-full p-4 text-center tracking-widest text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:border-indigo-500 outline-none transition uppercase"/>
+                             <button onClick={joinGame} disabled={!userProfile} className="w-full py-3 font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition transform hover:scale-105 disabled:bg-gray-500">Rejoindre une Partie</button>
+                        </div>
+                        {error && <p className="text-red-400 mt-4">{error}</p>}
+                    </div>
                 </div>
-
-                {/* Section Joueurs en Ligne (maintenant juste en dessous) */}
-                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mt-8"> {/* Ajouté mt-8 pour l'espacement */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
                     <h2 className="text-2xl font-bold text-white mb-4">Joueurs en Ligne</h2>
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                         {onlinePlayers.length > 0 ? onlinePlayers.map(p => (
@@ -496,7 +491,7 @@ function GameRoom({ gameId, user, setScreen, setOnlineGameId }) {
                     awardPoints(newGameData.winner, newGameData.players);
                 }
                 if (game?.status !== 'waiting' && newGameData.status === 'waiting') {
-                    setPointsGained(0); // Reset for new game
+                    setPointsGained(0);
                 }
                 setGame(newGameData); 
             } else { 
@@ -511,7 +506,7 @@ function GameRoom({ gameId, user, setScreen, setOnlineGameId }) {
             setLoading(false); 
         });
         return () => unsubscribe();
-    }, [gameId, setScreen, setOnlineGameId]);
+    }, [gameId, setScreen, setOnlineGameId, game?.status]);
     
     const awardPoints = async (winner, players) => {
         const myInfo = players.find(p => p.uid === user.uid);
@@ -757,9 +752,9 @@ function OnlineCluePhase({ game, myPlayerInfo, onGiveClue }) {
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-xl">
              <div className="text-center bg-gray-700 p-6 rounded-lg mb-6">
-                <p className="text-lg text-gray-300">Votre rôle: <span className={`text-xl font-bold ${myPlayerInfo.role === 'Civilian' ? 'text-blue-400' : (myPlayerInfo.role === 'Undercover' ? 'text-red-400' : 'text-gray-200')}`}>{myPlayerInfo.role}</span></p>
-                <hr className="my-3 border-gray-600" />
-                <p className="text-lg text-gray-300">Votre mot: <span className="text-4xl font-bold text-white tracking-widest uppercase">{myPlayerInfo.role === 'Mr. White' ? '?????' : (myPlayerInfo.role === 'Civilian' ? game.wordPair.civilian : game.wordPair.undercover)}</span></p>
+                <p className="text-lg text-gray-300">Votre mot :</p>
+                <p className="text-4xl font-bold text-white tracking-widest uppercase">{myPlayerInfo.role === 'Mr. White' ? '?????' : (myPlayerInfo.role === 'Civilian' ? game.wordPair.civilian : game.wordPair.undercover)}</p>
+                {myPlayerInfo.role === 'Mr. White' && <p className="text-sm text-gray-400 mt-2">Vous n'avez pas de mot. Votre objectif est de deviner le mot des civils !</p>}
             </div>
 
             <div className="mb-6">
@@ -795,7 +790,9 @@ function OnlineCluePhase({ game, myPlayerInfo, onGiveClue }) {
 }
 
 function OnlineVotingBoard({ game, myPlayerInfo, onVote }) {
-    const activePlayers = game.players.filter(p => !p.isEliminated);
+    const activePlayers = useMemo(() => {
+        return game.players.filter(p => !p.isEliminated).sort(() => Math.random() - 0.5);
+    }, [game.players]);
     
     return (
         <div className="bg-gray-800 p-6 rounded-lg shadow-xl">
@@ -879,11 +876,11 @@ function OnlineEndScreen({ game, isHost, onPlayAgain, onLeave, userProfile, poin
                          <span className={p.role === 'Civilian' ? 'text-blue-400' : (p.role === 'Undercover' ? 'text-red-400' : 'text-gray-200')}>{p.role}</span>
                      </div>
                 ))}
-                 {pointsGained > 0 && (
+                 {userProfile && (
                     <div className="mt-6 pt-4 border-t border-gray-600 text-center">
                         <h3 className="text-xl font-bold text-yellow-400 mb-2">Votre Score</h3>
                         <p className="text-2xl text-white">
-                            {initialScore} + <span className="text-green-400 font-bold">{pointsGained}</span> = {initialScore + pointsGained}
+                            {initialScore} + <span className="font-bold text-green-400">{pointsGained}</span> = {userProfile.score}
                         </p>
                     </div>
                 )}
@@ -964,10 +961,6 @@ function OfflineGame({ localGameData, setScreen }) {
         const chosenWordPair = wordPairs[Math.floor(Math.random() * wordPairs.length)];
         setCivilianWord(chosenWordPair.civilian);
         let tempPlayers = [...currentPlayers];
-        for (let i = tempPlayers.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [tempPlayers[i], tempPlayers[j]] = [tempPlayers[j], tempPlayers[i]];
-        }
         
         const hasMrWhite = tempPlayers.length >= 5;
         let playerIndex = 0;
@@ -976,13 +969,25 @@ function OfflineGame({ localGameData, setScreen }) {
         assignedRoles.push('Undercover');
         while(assignedRoles.length < tempPlayers.length) assignedRoles.push('Civilian');
 
-        const reinitializedPlayers = tempPlayers.map((player, index) => {
+        // Shuffle roles before assigning
+        for (let i = assignedRoles.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [assignedRoles[i], assignedRoles[j]] = [assignedRoles[j], assignedRoles[i]];
+        }
+
+        let reinitializedPlayers = tempPlayers.map((player, index) => {
             const role = assignedRoles[index];
             let word = '';
             if (role === 'Civilian') word = chosenWordPair.civilian;
             if (role === 'Undercover') word = chosenWordPair.undercover;
             return { ...player, role: role, word: word, isEliminated: false };
         });
+        
+        // Shuffle final list for random reveal order
+        for (let i = reinitializedPlayers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [reinitializedPlayers[i], reinitializedPlayers[j]] = [reinitializedPlayers[j], reinitializedPlayers[i]];
+        }
 
         setPlayers(reinitializedPlayers);
         setWinner(null);
@@ -1069,17 +1074,16 @@ function OfflineGame({ localGameData, setScreen }) {
                     <>
                         <h2 className="text-4xl font-bold text-white mb-4">Passez le téléphone à</h2>
                         <p className="text-6xl font-extrabold text-indigo-400 mb-8">{currentPlayer.name}</p>
-                        <button onClick={handleReveal} className="px-10 py-4 text-2xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105">Voir mon rôle</button>
+                        <button onClick={handleReveal} className="px-10 py-4 text-2xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105">Voir mon mot</button>
                     </>
                 ) : (
                     <>
-                        <p className="text-lg text-gray-300">Votre rôle est :</p>
-                        <p className={`text-3xl font-bold mb-6 ${currentPlayer.role === 'Civilian' ? 'text-blue-400' : (currentPlayer.role === 'Undercover' ? 'text-red-400' : 'text-gray-200')}`}>{currentPlayer.role}</p>
-                        {currentPlayer.role !== 'Mr. White' && <>
-                            <p className="text-lg text-gray-300">Votre mot est :</p>
-                            <p className="text-5xl font-bold text-white tracking-widest uppercase mb-10">{currentPlayer.word}</p>
-                        </>}
-                        {currentPlayer.role === 'Mr. White' && <p className="text-xl text-gray-300 mb-10">Vous n'avez pas de mot. Restez discret et essayez de deviner le mot des Civils !</p>}
+                        <p className="text-lg text-gray-300">Votre mot :</p>
+                        {currentPlayer.role !== 'Mr. White' ? (
+                             <p className="text-5xl font-bold text-white tracking-widest uppercase mb-10">{currentPlayer.word}</p>
+                        ) : (
+                            <p className="text-xl text-gray-300 mb-10">Vous n'avez pas de mot. Votre objectif est de deviner le mot des Civils !</p>
+                        )}
                         <button onClick={handleNext} className="px-10 py-4 text-2xl font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">{revealIndex < players.length - 1 ? 'Cacher et passer' : 'Commencer à jouer'}</button>
                     </>
                 )}

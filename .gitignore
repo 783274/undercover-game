@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependency directories
+node_modules/
+
+# Build output directory (Crucial pour Netlify : le laisser non commenté pour Git !)
+# IMPORTANT : Pour Netlify, nous voulons que 'dist' soit commit !
+# Si vous utilisez Vite, le dossier de build par défaut est 'dist'.
+# Si vous utilisiez Create React App, ce serait 'build'.
+# Pour Netlify, assurez-vous que ce dossier est PUSHED !
+# Donc, si vous avez "/dist", retirez-le ou commentez-le !
+# La bonne approche pour Netlify est de ne PAS l'ignorer ici.
+
+# Uncommentez la ligne suivante si vous voulez ignorer le dossier de build.
+# Mais pour Netlify, nous ne voulons PAS l'ignorer.
+# /dist
+# /build
+
+# Temporary files
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.parcel-cache/
+
+# IDE related
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+/coverage
+
+# Misc
+.npm/

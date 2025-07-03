@@ -307,6 +307,7 @@ function AuthScreen({ setScreen }) {
 }
 
 // --- Lobby Component (Online) ---
+// --- Lobby Component (Online) ---
 function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
     const [joinCode, setJoinCode] = useState('');
     const [error, setError] = useState('');
@@ -314,6 +315,7 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
     const [onlinePlayers, setOnlinePlayers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Fonction pour générer un ID de partie
     const generateGameId = (length = 6) => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
@@ -323,6 +325,7 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         return result;
     };
 
+    // Effet pour charger le profil utilisateur et les joueurs en ligne
     useEffect(() => {
         if (!user || user.isAnonymous) return;
         
@@ -331,15 +334,17 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
             if (doc.exists()) {
                 setUserProfile(doc.data());
             } else {
+                // Créer un profil si l'utilisateur n'en a pas (première connexion)
                 setDoc(userProfileRef, { email: user.email, pseudo: "Nouveau Joueur", score: 0 });
             }
         }, err => console.error("Error reading user profile:", err));
 
+        // Écouter les joueurs en ligne
         const onlineUsersRef = query(collection(db, 'userProfiles'), where("state", "==", "online"));
         const unsubscribeOnline = onSnapshot(onlineUsersRef, (snapshot) => {
             const players = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(p => p.id !== user.uid); 
+                .filter(p => p.id !== user.uid); // Exclure l'utilisateur actuel de la liste
             setOnlinePlayers(players);
         }, err => console.error("Error reading online players:", err));
 
@@ -349,6 +354,7 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         };
     }, [user]);
     
+    // Fonction pour créer une nouvelle partie en ligne
     const createGame = async () => {
         if (!userProfile || !userProfile.pseudo) {
             setError("Profil en cours de chargement, veuillez patienter...");
@@ -359,6 +365,7 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         try {
             let newGameId;
             let idExists = true;
+            // Générer un ID unique pour la partie
             while (idExists) {
                 newGameId = generateGameId();
                 const gameDocRef = doc(db, 'games', newGameId);
@@ -367,12 +374,13 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
             }
 
             const host = { uid: user.uid, pseudo: userProfile.pseudo, isHost: true };
+            // Créer le document de la partie dans Firestore
             await setDoc(doc(db, 'games', newGameId), {
                 host, players: [host], createdAt: new Date(), status: 'waiting',
             });
             
             setOnlineGameId(newGameId);
-            setScreen('onlineGame');
+            setScreen('onlineGame'); // Passer à l'écran de la salle de jeu
         } catch (err) { 
             console.error(err); 
             setError("Impossible de créer la partie."); 
@@ -381,6 +389,7 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
         }
     };
 
+    // Fonction pour rejoindre une partie existante
     const joinGame = async () => {
         if (!userProfile || !userProfile.pseudo) {
             setError("Profil en cours de chargement, veuillez patienter...");
@@ -393,8 +402,11 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
             const gameSnap = await getDoc(gameRef);
             if (gameSnap.exists()) {
                 const gameData = gameSnap.data();
+                // Si le joueur est déjà dans la partie, le rediriger directement
                 if (gameData.players.some(p => p.uid === user.uid)) { setOnlineGameId(joinCode.toUpperCase()); setScreen('onlineGame'); return; }
+                // Vérifier le statut de la partie
                 if (gameData.status !== 'waiting') { setError("Cette partie a déjà commencé ou est terminée."); return; }
+                // Ajouter le joueur à la partie
                 await updateDoc(gameRef, { players: arrayUnion({ uid: user.uid, pseudo: userProfile.pseudo, isHost: false }) });
                 setOnlineGameId(joinCode.toUpperCase());
                 setScreen('onlineGame');
@@ -404,30 +416,36 @@ function Lobby({ user, setScreen, setOnlineGameId, onSignOut }) {
 
     return (
         <div className="min-h-screen bg-gray-900 p-4 lg:p-8">
+            {/* Boutons de navigation en haut à droite */}
             <div className="absolute top-4 right-4 flex space-x-2">
                  <button onClick={() => setScreen('welcome')} className="px-4 py-2 text-sm font-semibold bg-gray-600 rounded-lg hover:bg-gray-700 transition">Changer de mode</button>
                  <button onClick={onSignOut} className="px-4 py-2 text-sm font-semibold bg-red-600 rounded-lg hover:bg-red-700 transition">Déconnexion</button>
             </div>
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2">
-                    <div className="text-center lg:text-left">
-                        <h1 className="text-5xl font-bold text-white mb-2">Bienvenue,</h1>
-                        <p className="text-indigo-400 text-lg mb-2">{userProfile?.pseudo || user.email}</p>
-                        <p className="text-2xl text-yellow-400 font-bold mb-10">Score: {userProfile?.score || 0}</p>
-                    </div>
-                    <div className="space-y-6 w-full max-w-sm mx-auto lg:mx-0">
-                        <button onClick={createGame} disabled={isLoading || !userProfile} className="w-full py-4 text-xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105 disabled:bg-gray-500">
-                            {isLoading ? 'Création...' : 'Créer une Partie'}
-                        </button>
-                        <div className="relative flex items-center"><hr className="w-full border-gray-600" /><span className="absolute px-3 font-medium text-gray-400 bg-gray-900 -translate-x-1/2 left-1/2">OU</span></div>
-                        <div className="space-y-2">
-                            <input type="text" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="CODE DE PARTIE" className="w-full p-4 text-center tracking-widest text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:border-indigo-500 outline-none transition uppercase"/>
-                             <button onClick={joinGame} disabled={!userProfile} className="w-full py-3 font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition transform hover:scale-105 disabled:bg-gray-500">Rejoindre une Partie</button>
-                        </div>
-                        {error && <p className="text-red-400 mt-4">{error}</p>}
-                    </div>
+            
+            {/* Conteneur principal centré avec largeur limitée */}
+            <div className="max-w-md mx-auto mt-12"> {/* J'ai ajouté mt-12 pour un peu d'espace en haut */}
+                {/* Section Bienvenue et Score */}
+                <div className="text-center mb-8">
+                    <h1 className="text-5xl font-bold text-white mb-2">Bienvenue,</h1>
+                    <p className="text-indigo-400 text-lg mb-2">{userProfile?.pseudo || user.email}</p>
+                    <p className="text-2xl text-yellow-400 font-bold mb-10">Score: {userProfile?.score || 0}</p>
                 </div>
-                <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
+
+                {/* Section Créer/Rejoindre une Partie */}
+                <div className="space-y-6 w-full"> {/* Supprimé max-w-sm et mx-auto ici car le parent gère la largeur */}
+                    <button onClick={createGame} disabled={isLoading || !userProfile} className="w-full py-4 text-xl font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition transform hover:scale-105 disabled:bg-gray-500">
+                        {isLoading ? 'Création...' : 'Créer une Partie'}
+                    </button>
+                    <div className="relative flex items-center"><hr className="w-full border-gray-600" /><span className="absolute px-3 font-medium text-gray-400 bg-gray-900 -translate-x-1/2 left-1/2">OU</span></div>
+                    <div className="space-y-2">
+                        <input type="text" value={joinCode} onChange={(e) => setJoinCode(e.target.value)} placeholder="CODE DE PARTIE" className="w-full p-4 text-center tracking-widest text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:border-indigo-500 outline-none transition uppercase"/>
+                         <button onClick={joinGame} disabled={!userProfile} className="w-full py-3 font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition transform hover:scale-105 disabled:bg-gray-500">Rejoindre une Partie</button>
+                    </div>
+                    {error && <p className="text-red-400 mt-4">{error}</p>}
+                </div>
+
+                {/* Section Joueurs en Ligne (maintenant juste en dessous) */}
+                <div className="bg-gray-800 p-6 rounded-xl shadow-lg mt-8"> {/* Ajouté mt-8 pour l'espacement */}
                     <h2 className="text-2xl font-bold text-white mb-4">Joueurs en Ligne</h2>
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                         {onlinePlayers.length > 0 ? onlinePlayers.map(p => (
